@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Passport Photo Print Generator</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- jsPDF for PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
+    <style>
+        /* Custom scrollbar for a cleaner look */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+
+        /* Input Range Styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #2563eb;
+            cursor: pointer;
+            margin-top: -6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #e2e8f0;
+            border-radius: 2px;
+        }
+        
+        /* Print Media Styles to print exactly the generated canvas */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #print-area, #print-area * {
+                visibility: visible;
+            }
+            #print-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            @page {
+                margin: 0;
+            }
+        }
+
+        .checkerboard {
+            background-color: #f0f0f0;
+            background-image: 
+                linear-gradient(45deg, #ccc 25%, transparent 25%), 
+                linear-gradient(-45deg, #ccc 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #ccc 75%), 
+                linear-gradient(-45deg, transparent 75%, #ccc 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans h-screen flex flex-col overflow-hidden">
+
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200 py-3 px-6 flex items-center justify-between shrink-0 z-10">
+        <div class="flex items-center gap-3">
+            <div class="bg-blue-600 p-2 rounded-lg text-white">
+                <i data-lucide="image"></i>
+            </div>
+            <h1 class="text-xl font-bold text-gray-900 tracking-tight">Passport Photo Print Generator</h1>
+        </div>
+        <div class="text-sm text-gray-500 hidden sm:block">
+            High-quality, print-ready layouts. No backend required.
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="flex-1 flex flex-col lg:flex-row overflow-hidden">
+        
+        <!-- Left Panel: Controls -->
+        <aside class="w-full lg:w-80 bg-white border-r border-gray-200 overflow-y-auto shrink-0 flex flex-col">
+            <div class="p-5 space-y-6">
+                
+                <!-- 1. Upload Section -->
+                <section>
+                    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">1. Upload Image</h2>
+                    <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:bg-gray-50 hover:border-blue-400 transition-colors cursor-pointer relative group">
+                        <input type="file" id="file-input" accept="image/jpeg, image/png, image/jpg" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                        <i data-lucide="upload-cloud" class="mx-auto text-gray-400 group-hover:text-blue-500 mb-2" width="32" height="32"></i>
+                        <p class="text-sm text-gray-600 font-medium">Click or drag image here</p>
+                        <p class="text-xs text-gray-400 mt-1">JPG, PNG, JPEG up to 10MB</p>
+                    </div>
+                </section>
+
+                <!-- 2. Editing Tools -->
+                <section class="opacity-50 pointer-events-none transition-opacity" id="panel-editing">
+                    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex justify-between">
+                        2. Transform
+                        <button id="btn-reset-transform" class="text-blue-600 hover:text-blue-800 lowercase text-[10px] cursor-pointer" title="Reset Transforms"><i data-lucide="rotate-ccw" width="12" height="12"></i></button>
+                    </h2>
+                    <div class="grid grid-cols-4 gap-2 mb-3">
+                        <button class="btn-tool p-2 bg-gray-100 hover:bg-gray-200 rounded text-gray-700 flex justify-center" onclick="updateTransform('rotate', -90)" title="Rotate Left"><i data-lucide="rotate-ccw" width="18"></i></button>
+                        <button class="btn-tool p-2 bg-gray-100 hover:bg-gray-200 rounded text-gray-700 flex justify-center" onclick="updateTransform('rotate', 90)" title="Rotate Right"><i data-lucide="rotate-cw" width="18"></i></button>
+                        <button class="btn-tool p-2 bg-gray-100 hover:bg-gray-200 rounded text-gray-700 flex justify-center" onclick="updateTransform('flipH')" title="Flip Horizontal"><i data-lucide="flip-horizontal" width="18"></i></button>
+                        <button class="btn-tool p-2 bg-gray-100 hover:bg-gray-200 rounded text-gray-700 flex justify-center" onclick="updateTransform('flipV')" title="Flip Vertical"><i data-lucide="flip-vertical" width="18"></i></button>
+                    </div>
+                    <div class="text-xs text-gray-500 mb-1 flex justify-between"><span>Zoom</span> <span id="val-zoom">100%</span></div>
+                    <input type="range" id="slider-zoom" min="10" max="300" value="100" class="mb-2">
+                    <p class="text-[10px] text-gray-400 italic mt-1">Tip: Drag the edited image to pan, scroll to zoom.</p>
+                </section>
+
+                <!-- 3. Adjustments -->
+                <section class="opacity-50 pointer-events-none transition-opacity" id="panel-adjustments">
+                    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex justify-between">
+                        3. Adjustments
+                        <button id="btn-reset-adjust" class="text-blue-600 hover:text-blue-800 lowercase text-[10px] cursor-pointer" title="Reset Adjustments"><i data-lucide="rotate-ccw" width="12" height="12"></i></button>
+                    </h2>
+                    <div class="space-y-3">
+                        <div>
+                            <div class="text-xs text-gray-600 mb-1 flex justify-between"><span>Brightness</span> <span id="val-bright">100%</span></div>
+                            <input type="range" id="slider-bright" min="0" max="200" value="100">
+                        </div>
+                        <div>
+                            <div class="text-xs text-gray-600 mb-1 flex justify-between"><span>Contrast</span> <span id="val-contrast">100%</span></div>
+                            <input type="range" id="slider-contrast" min="0" max="200" value="100">
+                        </div>
+                        <div>
+                            <div class="text-xs text-gray-600 mb-1 flex justify-between"><span>Saturation</span> <span id="val-sat">100%</span></div>
+                            <input type="range" id="slider-sat" min="0" max="200" value="100">
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 4. Background -->
+                <section class="opacity-50 pointer-events-none transition-opacity" id="panel-background">
+                    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">4. Background</h2>
+                    
+                    <button id="btn-remove-bg" class="w-full py-2 px-3 mb-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-sm font-medium border border-indigo-200 flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i data-lucide="wand-2" width="16"></i> AI Remove Background
+                    </button>
+
+                    <div class="mb-2 text-xs text-gray-600 font-medium">Background Color</div>
+                    <div class="flex gap-2 mb-3">
+                        <button class="bg-color-btn w-8 h-8 rounded-full border-2 border-gray-300 bg-white" data-color="#ffffff" title="White"></button>
+                        <button class="bg-color-btn w-8 h-8 rounded-full border-2 border-transparent bg-blue-500" data-color="#3b82f6" title="Blue"></button>
+                        <button class="bg-color-btn w-8 h-8 rounded-full border-2 border-transparent bg-red-500" data-color="#ef4444" title="Red"></button>
+                        <button class="bg-color-btn w-8 h-8 rounded-full border-2 border-transparent bg-gray-300" data-color="#d1d5db" title="Light Grey"></button>
+                        <div class="relative w-8 h-8 rounded-full overflow-hidden border-2 border-transparent shadow-sm flex items-center justify-center bg-gradient-to-br from-pink-400 via-purple-400 to-indigo-400">
+                            <input type="color" id="input-bg-color" value="#ffffff" class="absolute inset-0 w-[200%] h-[200%] top-[-50%] left-[-50%] cursor-pointer opacity-0">
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Outline Thickness Slider -->
+                    <div id="edge-control" class="hidden mt-4 pt-4 border-t border-gray-200">
+                        <div class="text-xs text-gray-600 mb-1 flex justify-between font-medium">
+                            <span>Outline Thickness</span> 
+                            <span id="val-edge" class="text-blue-600">Normal</span>
+                        </div>
+                        <input type="range" id="slider-edge" min="0" max="100" value="50">
+                        <div class="flex justify-between text-[10px] text-gray-400 mt-1">
+                            <span>Thicker</span>
+                            <span>Thinner (Cut Deep)</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 5. Borders -->
+                <section class="opacity-50 pointer-events-none transition-opacity" id="panel-border">
+                    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">5. Border</h2>
+                    <div class="flex items-center justify-between mb-3">
+                        <label class="text-sm text-gray-700 flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" id="check-border" class="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer">
+                            Add Border
+                        </label>
+                        <input type="color" id="input-border-color" value="#000000" class="w-6 h-6 rounded cursor-pointer border border-gray-300 p-0" disabled>
+                    </div>
+                    <div>
+                        <div class="text-xs text-gray-600 mb-1 flex justify-between"><span>Thickness</span> <span id="val-border">2px</span></div>
+                        <input type="range" id="slider-border" min="1" max="10" value="2" disabled class="opacity-50">
+                    </div>
+                </section>
+
+            </div>
+        </aside>
+
+        <!-- Center Panel: Image Editor -->
+        <section class="flex-1 flex flex-col bg-gray-100 overflow-y-auto min-h-[50vh] lg:min-h-0 border-r border-gray-200 p-4">
+            <div class="w-full max-w-2xl mx-auto space-y-4">
+                
+                <!-- Original Image View -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
+                    <div class="bg-gray-50 border-b border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 flex justify-between items-center">
+                        <span>Original Image</span>
+                    </div>
+                    <div class="p-4 flex justify-center items-center min-h-[150px] bg-gray-100 checkerboard relative">
+                        <canvas id="orig-canvas" class="max-w-full max-h-[250px] object-contain hidden shadow-sm bg-white"></canvas>
+                        <div id="orig-placeholder" class="text-gray-400 text-sm flex flex-col items-center">
+                            <i data-lucide="image" class="mb-2 opacity-50" width="32" height="32"></i>
+                            No image uploaded
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Edited Image View (Single Photo) -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
+                    <div class="bg-gray-50 border-b border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 flex justify-between items-center">
+                        <span>Edited Passport Photo (35x45mm Ratio)</span>
+                        <span class="text-[10px] text-gray-400 font-normal">Drag to pan</span>
+                    </div>
+                    <div class="p-4 flex justify-center items-center bg-gray-100 checkerboard overflow-hidden cursor-move relative" id="edit-container">
+                        <canvas id="edit-canvas" width="413" height="531" class="shadow-md hidden bg-white origin-center touch-none"></canvas>
+                        <div id="edit-placeholder" class="text-gray-400 text-sm flex flex-col items-center py-10">
+                            Upload to preview edit
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Right Panel: Print Layout -->
+        <aside class="w-full lg:w-96 bg-white overflow-y-auto shrink-0 flex flex-col">
+            <div class="p-5 flex-1 flex flex-col">
+                <h2 class="text-lg font-bold text-gray-900 mb-4 border-b pb-2">Print Settings</h2>
+                
+                <div class="space-y-4 mb-6 opacity-50 pointer-events-none transition-opacity" id="panel-print">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Sheet Layout</label>
+                        <select id="select-layout" class="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                            <option value="A4-auto">A4 Paper (Auto Grid)</option>
+                            <option value="A6-12">A6 Paper (12 photos)</option>
+                            <option value="A6-9">A6 Paper (9 photos)</option>
+                            <option value="4x6-L-8">4x6 Inch - Landscape (8 photos)</option>
+                            <option value="4x6-P-9">4x6 Inch - Portrait (9 photos)</option>
+                            <option value="4x6-P-12">4x6 Inch - Portrait (12 photos)</option>
+                        </select>
+                    </div>
+
+                    <!-- Print Preview Wrapper -->
+                    <div class="mt-4">
+                        <div class="flex justify-between items-end mb-2">
+                            <label class="block text-sm font-medium text-gray-700">Sheet Preview</label>
+                        </div>
+                        <div class="bg-gray-200 rounded-lg p-2 flex justify-center items-center border border-gray-300 min-h-[250px]">
+                            <!-- The actual massive canvas generated for print will be visually scaled down here via CSS -->
+                            <canvas id="preview-canvas" class="max-w-full max-h-[350px] shadow-sm bg-white"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="mt-auto pt-6 space-y-3 opacity-50 pointer-events-none transition-opacity" id="panel-actions">
+                    <button id="btn-dl-png" class="w-full py-2.5 px-4 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-sm font-medium shadow flex items-center justify-center gap-2 transition-colors">
+                        <i data-lucide="download" width="18"></i> Download PNG
+                    </button>
+                    <button id="btn-dl-pdf" class="w-full py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium shadow flex items-center justify-center gap-2 transition-colors">
+                        <i data-lucide="file-text" width="18"></i> Download PDF
+                    </button>
+                    <button id="btn-print" class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-base font-bold shadow-md flex items-center justify-center gap-2 transition-colors">
+                        <i data-lucide="printer" width="20"></i> Print Sheet
+                    </button>
+                </div>
+
+            </div>
+        </aside>
+
+    </main>
+
+    <!-- Hidden area strictly for holding the print canvas during window.print() -->
+    <div id="print-area" class="hidden"></div>
+
+    <script>
+        let printLayoutTimeout = null;
+
+        // --- State Management ---
+        const state = {
+            imageLoaded: false,
+            originalImage: new Image(),
+            
+            // Mask Processing Cache
+            processedImageData: null, 
+            processedCanvas: null, 
+            rawAiImage: null,
+            
+            // Transforms
+            zoom: 1,
+            panX: 0,
+            panY: 0,
+            rotate: 0,
+            flipH: 1,
+            flipV: 1,
+            
+            // Adjustments
+            brightness: 100,
+            contrast: 100,
+            saturation: 100,
+            
+            // Background
+            bgRemoved: false,
+            bgColor: '#ffffff',
+            edgeShift: 50, // 50 is Neutral/Original edge.
+            
+            // Border
+            borderEnabled: false,
+            borderColor: '#000000',
+            borderWidth: 2,
+            
+            // Layout Configs
+            layouts: {
+                'A4-auto': { w: 2480, h: 3508, cols: 5, rows: 7, name: 'A4' },
+                'A6-12':   { w: 1240, h: 1748, cols: 3, rows: 4, name: 'A6' },
+                'A6-9':    { w: 1240, h: 1748, cols: 3, rows: 3, name: 'A6' },
+                '4x6-L-8': { w: 1800, h: 1200, cols: 4, rows: 2, name: '4x6 Landscape' },
+                '4x6-P-9': { w: 1200, h: 1800, cols: 3, rows: 3, name: '4x6 Portrait' },
+                '4x6-P-12':{ w: 1200, h: 1800, cols: 3, rows: 4, name: '4x6 Portrait' }
+            },
+            currentLayout: 'A4-auto',
+            
+            photoWidth: 413,
+            photoHeight: 531
+        };
+
+        // --- DOM Elements ---
+        const els = {
+            fileInput: document.getElementById('file-input'),
+            dropZone: document.getElementById('drop-zone'),
+            origCanvas: document.getElementById('orig-canvas'),
+            origPlaceholder: document.getElementById('orig-placeholder'),
+            editCanvas: document.getElementById('edit-canvas'),
+            editPlaceholder: document.getElementById('edit-placeholder'),
+            previewCanvas: document.getElementById('preview-canvas'),
+            
+            panels: ['editing', 'adjustments', 'background', 'border', 'print', 'actions'].map(id => document.getElementById(`panel-${id}`)),
+            
+            zoom: document.getElementById('slider-zoom'),
+            valZoom: document.getElementById('val-zoom'),
+            bright: document.getElementById('slider-bright'),
+            valBright: document.getElementById('val-bright'),
+            contrast: document.getElementById('slider-contrast'),
+            valContrast: document.getElementById('val-contrast'),
+            sat: document.getElementById('slider-sat'),
+            valSat: document.getElementById('val-sat'),
+            
+            bgColors: document.querySelectorAll('.bg-color-btn'),
+            customBg: document.getElementById('input-bg-color'),
+            btnRemoveBg: document.getElementById('btn-remove-bg'),
+            
+            edgeControl: document.getElementById('edge-control'),
+            sliderEdge: document.getElementById('slider-edge'),
+            valEdge: document.getElementById('val-edge'),
+            
+            checkBorder: document.getElementById('check-border'),
+            borderColor: document.getElementById('input-border-color'),
+            borderWidth: document.getElementById('slider-border'),
+            valBorder: document.getElementById('val-border'),
+            
+            selectLayout: document.getElementById('select-layout'),
+            btnResetTransform: document.getElementById('btn-reset-transform'),
+            btnResetAdjust: document.getElementById('btn-reset-adjust'),
+            
+            btnDlPng: document.getElementById('btn-dl-png'),
+            btnDlPdf: document.getElementById('btn-dl-pdf'),
+            btnPrint: document.getElementById('btn-print'),
+            printArea: document.getElementById('print-area')
+        };
+
+        // Initialize Icons
+        lucide.createIcons();
+
+        // --- Core Functions ---
+
+        function init() {
+            setupEventListeners();
+        }
+
+        function unlockPanels() {
+            els.panels.forEach(p => p.classList.remove('opacity-50', 'pointer-events-none'));
+            els.origCanvas.classList.remove('hidden');
+            els.origPlaceholder.classList.add('hidden');
+            els.editCanvas.classList.remove('hidden');
+            els.editPlaceholder.classList.add('hidden');
+        }
+
+        function handleImageUpload(file) {
+            if (!file || !file.type.match('image.*')) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                state.originalImage.onload = () => {
+                    state.imageLoaded = true;
+                    // Reset states on new upload
+                    resetTransforms();
+                    resetAdjustments();
+                    
+                    state.bgRemoved = false;
+                    state.rawAiImage = null;
+                    state.processedCanvas = null; 
+                    
+                    // Reset Edge Trim to neutral
+                    state.edgeShift = 50; 
+                    els.sliderEdge.value = 50;
+                    els.valEdge.innerText = 'Normal';
+                    els.edgeControl.classList.add('hidden'); 
+                    
+                    els.btnRemoveBg.classList.remove('bg-indigo-600', 'text-white');
+                    els.btnRemoveBg.classList.add('bg-indigo-50', 'text-indigo-700');
+                    els.btnRemoveBg.innerHTML = '<i data-lucide="wand-2" width="16"></i> AI Remove Background';
+                    els.btnRemoveBg.disabled = false;
+                    lucide.createIcons();
+                    
+                    // Draw to original canvas
+                    const oCtx = els.origCanvas.getContext('2d');
+                    els.origCanvas.width = state.originalImage.width;
+                    els.origCanvas.height = state.originalImage.height;
+                    oCtx.drawImage(state.originalImage, 0, 0);
+                    
+                    unlockPanels();
+                    
+                    // Auto-scale zoom
+                    const scaleToFitH = state.photoHeight / state.originalImage.height;
+                    const scaleToFitW = state.photoWidth / state.originalImage.width;
+                    state.zoom = Math.max(scaleToFitH, scaleToFitW) * 100;
+                    els.zoom.value = state.zoom;
+                    els.valZoom.innerText = Math.round(state.zoom) + '%';
+                    
+                    state.panX = 0;
+                    state.panY = (state.originalImage.height * (state.zoom/100) - state.photoHeight) / 4; 
+                    
+                    updateEditor();
+                };
+                state.originalImage.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function updateEditor() {
+            if (!state.imageLoaded) return;
+            
+            const canvas = els.editCanvas;
+            const ctx = canvas.getContext('2d');
+            
+            // Background
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = state.bgColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.save();
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            
+            ctx.translate(cx + state.panX, cy + state.panY);
+            ctx.rotate(state.rotate * Math.PI / 180);
+            
+            const scaleFactor = state.zoom / 100;
+            ctx.scale(state.flipH * scaleFactor, state.flipV * scaleFactor);
+            
+            ctx.filter = `brightness(${state.brightness}%) contrast(${state.contrast}%) saturate(${state.saturation}%)`;
+            
+            let imgToDraw = state.originalImage;
+            
+            if (state.bgRemoved && state.processedImageData) {
+                if (!state.processedCanvas) {
+                    state.processedCanvas = document.createElement('canvas');
+                    state.processedCanvas.width = state.originalImage.width;
+                    state.processedCanvas.height = state.originalImage.height;
+                }
+                state.processedCanvas.getContext('2d').putImageData(state.processedImageData, 0, 0);
+                imgToDraw = state.processedCanvas;
+            }
+            
+            ctx.drawImage(imgToDraw, -imgToDraw.width / 2, -imgToDraw.height / 2);
+            ctx.restore();
+            
+            if (printLayoutTimeout) clearTimeout(printLayoutTimeout);
+            printLayoutTimeout = setTimeout(() => {
+                requestAnimationFrame(generatePrintLayout);
+            }, 300);
+        }
+
+        // --- AI Background Removal Logic (Flask Server) ---
+        
+        async function toggleBackgroundRemoval() {
+            if (!state.imageLoaded) return;
+            
+            if (state.bgRemoved) {
+                state.bgRemoved = false;
+                els.btnRemoveBg.classList.remove('bg-indigo-600', 'text-white');
+                els.btnRemoveBg.classList.add('bg-indigo-50', 'text-indigo-700');
+                els.btnRemoveBg.innerHTML = '<i data-lucide="wand-2" width="16"></i> AI Remove Background';
+                els.btnRemoveBg.disabled = false;
+                els.edgeControl.classList.add('hidden'); 
+                lucide.createIcons();
+                updateEditor();
+                return;
+            }
+
+            els.btnRemoveBg.innerHTML = '<i class="animate-spin" data-lucide="loader-2" width="16"></i> Processing on Server...';
+            els.btnRemoveBg.disabled = true;
+            lucide.createIcons();
+            
+            try {
+                // Get the current uploaded file directly from input if possible, 
+                // otherwise fallback to blob from canvas if image was dragged/dropped
+                let file = els.fileInput.files[0];
+                let formData = new FormData();
+                
+                if (file) {
+                    formData.append("image", file);
+                } else {
+                    // Fallback for drag-and-drop
+                    const blob = await new Promise(resolve => els.origCanvas.toBlob(resolve, 'image/jpeg', 0.95));
+                    formData.append("image", blob, "upload.jpg");
+                }
+
+                // Call the Flask Backend
+                const response = await fetch("/remove-bg", {
+                    method: "POST",
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error("Server error - Make sure Python server is running!");
+                }
+
+                const outBlob = await response.blob();
+                const outUrl = URL.createObjectURL(outBlob);
+
+                const resultImage = new Image();
+                resultImage.onload = () => {
+                    const tmpCanvas = document.createElement('canvas');
+                    // Use the result image dimensions exactly
+                    tmpCanvas.width = resultImage.width;
+                    tmpCanvas.height = resultImage.height;
+                    const ctx = tmpCanvas.getContext('2d');
+                    ctx.drawImage(resultImage, 0, 0, tmpCanvas.width, tmpCanvas.height);
+
+                    state.rawAiImage = ctx.getImageData(0, 0, tmpCanvas.width, tmpCanvas.height);
+                    state.processedImageData = new ImageData(
+                        new Uint8ClampedArray(state.rawAiImage.data),
+                        tmpCanvas.width,
+                        tmpCanvas.height
+                    );
+
+                    state.bgRemoved = true;
+
+                    els.btnRemoveBg.classList.add('bg-indigo-600', 'text-white');
+                    els.btnRemoveBg.classList.remove('bg-indigo-50', 'text-indigo-700');
+                    els.btnRemoveBg.innerHTML = '<i data-lucide="check" width="16"></i> Person Extracted';
+                    els.btnRemoveBg.disabled = false;
+                    els.edgeControl.classList.remove('hidden');
+                    lucide.createIcons();
+
+                    applyMask();
+                };
+                resultImage.src = outUrl;
+
+            } catch (error) {
+                console.error("Server Background Removal Failed:", error);
+                alert("Failed to extract person. Ensure your Flask server (app.py) is running locally.");
+                els.btnRemoveBg.disabled = false;
+                els.btnRemoveBg.innerHTML = '<i data-lucide="wand-2" width="16"></i> AI Remove Background';
+                lucide.createIcons();
+            }
+        }
+
+        function applyMask() {
+            if (!state.rawAiImage || !state.processedImageData) return;
+
+            const rawData = state.rawAiImage.data;
+            const processedData = state.processedImageData.data;
+
+            // Map slider (0-100) to cut threshold
+            const shift = state.edgeShift; 
+            const choke = shift > 50 ? (shift - 50) * 5 : 0; 
+            const dilate = shift < 50 ? (50 - shift) * 5 : 0;
+
+            for (let i = 0; i < processedData.length; i += 4) {
+                // Restore original RGB from the rembg image
+                processedData[i] = rawData[i];
+                processedData[i+1] = rawData[i+1];
+                processedData[i+2] = rawData[i+2];
+
+                let alpha = rawData[i + 3]; 
+                
+                if (shift > 50) {
+                    // Thinner outline: choke the alpha
+                    if (alpha <= choke) {
+                        alpha = 0;
+                    } else {
+                        alpha = ((alpha - choke) / (255 - choke)) * 255;
+                    }
+                } else if (shift < 50) {
+                    // Thicker outline: boost the alpha
+                    if (alpha > 0) {
+                        alpha = Math.min(255, alpha + dilate);
+                    }
+                }
+                
+                processedData[i + 3] = alpha;
+            }
+
+            updateEditor();
+        }
+
+        // Generates the massive canvas for printing
+        function generatePrintLayout() {
+            if (!state.imageLoaded) return;
+            
+            const layout = state.layouts[state.currentLayout];
+            const pCanvas = els.previewCanvas;
+            const ctx = pCanvas.getContext('2d');
+            
+            pCanvas.width = layout.w;
+            pCanvas.height = layout.h;
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, pCanvas.width, pCanvas.height);
+            
+            let cW = state.photoWidth;
+            let cH = state.photoHeight;
+            let paddingX = 40; 
+            let paddingY = 40;
+            
+            const totalRequiredW = (layout.cols * cW) + ((layout.cols - 1) * paddingX);
+            const totalRequiredH = (layout.rows * cH) + ((layout.rows - 1) * paddingY);
+            
+            if (totalRequiredW > layout.w || totalRequiredH > layout.h) {
+                const scaleW = (layout.w - 100 - (layout.cols-1)*paddingX) / (layout.cols * cW);
+                const scaleH = (layout.h - 100 - (layout.rows-1)*paddingY) / (layout.rows * cH);
+                const scale = Math.min(scaleW, scaleH);
+                cW *= scale;
+                cH *= scale;
+            }
+            
+            const gridW = (layout.cols * cW) + ((layout.cols - 1) * paddingX);
+            const gridH = (layout.rows * cH) + ((layout.rows - 1) * paddingY);
+            const startX = (layout.w - gridW) / 2;
+            const startY = (layout.h - gridH) / 2;
+            
+            ctx.lineWidth = state.borderWidth * (cW / state.photoWidth); 
+            ctx.strokeStyle = state.borderColor;
+            
+            for (let r = 0; r < layout.rows; r++) {
+                for (let c = 0; c < layout.cols; c++) {
+                    const x = startX + c * (cW + paddingX);
+                    const y = startY + r * (cH + paddingY);
+                    
+                    ctx.drawImage(els.editCanvas, x, y, cW, cH);
+                    
+                    if (state.borderEnabled) {
+                        ctx.strokeRect(x, y, cW, cH);
+                    }
+                }
+            }
+        }
+
+        // --- Interaction Handlers ---
+
+        function updateTransform(type, val) {
+            if (type === 'rotate') state.rotate = (state.rotate + val) % 360;
+            if (type === 'flipH') state.flipH *= -1;
+            if (type === 'flipV') state.flipV *= -1;
+            updateEditor();
+        }
+
+        function resetTransforms() {
+            state.zoom = 100;
+            state.panX = 0;
+            state.panY = 0;
+            state.rotate = 0;
+            state.flipH = 1;
+            state.flipV = 1;
+            els.zoom.value = 100;
+            els.valZoom.innerText = '100%';
+            updateEditor();
+        }
+
+        function resetAdjustments() {
+            state.brightness = 100;
+            state.contrast = 100;
+            state.saturation = 100;
+            els.bright.value = 100; els.valBright.innerText = '100%';
+            els.contrast.value = 100; els.valContrast.innerText = '100%';
+            els.sat.value = 100; els.valSat.innerText = '100%';
+            updateEditor();
+        }
+
+        // --- Panning & Zooming ---
+        let isDragging = false;
+        let startX, startY;
+
+        function setupCanvasMouseEvents() {
+            const canvas = els.editCanvas;
+            
+            canvas.addEventListener('mousedown', e => {
+                isDragging = true;
+                startX = e.offsetX;
+                startY = e.offsetY;
+                canvas.style.cursor = 'grabbing';
+            });
+            
+            window.addEventListener('mouseup', () => {
+                isDragging = false;
+                canvas.style.cursor = 'move';
+            });
+            
+            canvas.addEventListener('mousemove', e => {
+                if (!isDragging) return;
+                state.panX += (e.offsetX - startX);
+                state.panY += (e.offsetY - startY);
+                startX = e.offsetX;
+                startY = e.offsetY;
+                updateEditor();
+            });
+
+            canvas.addEventListener('touchstart', e => {
+                if(e.touches.length === 1) {
+                    isDragging = true;
+                    const touch = e.touches[0];
+                    const rect = canvas.getBoundingClientRect();
+                    startX = touch.clientX - rect.left;
+                    startY = touch.clientY - rect.top;
+                }
+            }, {passive: false});
+
+            canvas.addEventListener('touchmove', e => {
+                if (!isDragging || e.touches.length !== 1) return;
+                e.preventDefault(); 
+                const touch = e.touches[0];
+                const rect = canvas.getBoundingClientRect();
+                const currentX = touch.clientX - rect.left;
+                const currentY = touch.clientY - rect.top;
+                
+                state.panX += (currentX - startX);
+                state.panY += (currentY - startY);
+                startX = currentX;
+                startY = currentY;
+                updateEditor();
+            }, {passive: false});
+
+            canvas.addEventListener('touchend', () => isDragging = false);
+
+            canvas.addEventListener('wheel', e => {
+                e.preventDefault();
+                const zoomDir = e.deltaY > 0 ? -5 : 5;
+                let newZoom = state.zoom + zoomDir;
+                newZoom = Math.max(10, Math.min(300, newZoom));
+                state.zoom = newZoom;
+                els.zoom.value = newZoom;
+                els.valZoom.innerText = Math.round(newZoom) + '%';
+                updateEditor();
+            }, {passive: false});
+        }
+
+
+        // --- Event Listeners Setup ---
+        function setupEventListeners() {
+            els.fileInput.addEventListener('change', e => handleImageUpload(e.target.files[0]));
+            
+            els.dropZone.addEventListener('dragover', e => {
+                e.preventDefault();
+                els.dropZone.classList.add('bg-blue-50', 'border-blue-400');
+            });
+            els.dropZone.addEventListener('dragleave', e => {
+                e.preventDefault();
+                els.dropZone.classList.remove('bg-blue-50', 'border-blue-400');
+            });
+            els.dropZone.addEventListener('drop', e => {
+                e.preventDefault();
+                els.dropZone.classList.remove('bg-blue-50', 'border-blue-400');
+                if (e.dataTransfer.files.length) handleImageUpload(e.dataTransfer.files[0]);
+            });
+
+            els.zoom.addEventListener('input', e => { state.zoom = parseInt(e.target.value); els.valZoom.innerText = state.zoom + '%'; updateEditor(); });
+            els.btnResetTransform.addEventListener('click', resetTransforms);
+
+            const adjustHandler = (e, prop, label) => {
+                state[prop] = parseInt(e.target.value);
+                label.innerText = state[prop] + '%';
+                updateEditor();
+            };
+            els.bright.addEventListener('input', e => adjustHandler(e, 'brightness', els.valBright));
+            els.contrast.addEventListener('input', e => adjustHandler(e, 'contrast', els.valContrast));
+            els.sat.addEventListener('input', e => adjustHandler(e, 'saturation', els.valSat));
+            els.btnResetAdjust.addEventListener('click', resetAdjustments);
+
+            els.btnRemoveBg.addEventListener('click', toggleBackgroundRemoval);
+            els.bgColors.forEach(btn => {
+                btn.addEventListener('click', e => {
+                    els.bgColors.forEach(b => b.classList.replace('border-gray-800', 'border-transparent'));
+                    els.bgColors[0].classList.replace('border-gray-800', 'border-gray-300'); 
+                    e.target.classList.replace('border-transparent', 'border-gray-800');
+                    e.target.classList.replace('border-gray-300', 'border-gray-800');
+                    state.bgColor = e.target.dataset.color;
+                    updateEditor();
+                });
+            });
+            els.customBg.addEventListener('input', e => {
+                state.bgColor = e.target.value;
+                els.bgColors.forEach(b => b.classList.replace('border-gray-800', 'border-transparent'));
+                updateEditor();
+            });
+            
+            // Edge Shrink Slider 
+            let edgeTimeout;
+            els.sliderEdge.addEventListener('input', e => {
+                state.edgeShift = parseInt(e.target.value);
+                
+                // Show relative label to help user understand the logic
+                let label = state.edgeShift > 55 ? 'Thinner' : (state.edgeShift < 45 ? 'Thicker' : 'Normal');
+                els.valEdge.innerText = label;
+                
+                if (edgeTimeout) cancelAnimationFrame(edgeTimeout);
+                edgeTimeout = requestAnimationFrame(() => {
+                    applyMask();
+                });
+            });
+
+            els.checkBorder.addEventListener('change', e => {
+                state.borderEnabled = e.target.checked;
+                els.borderColor.disabled = !state.borderEnabled;
+                els.borderWidth.disabled = !state.borderEnabled;
+                els.borderWidth.classList.toggle('opacity-50', !state.borderEnabled);
+                updateEditor();
+            });
+            els.borderColor.addEventListener('input', e => { state.borderColor = e.target.value; updateEditor(); });
+            els.borderWidth.addEventListener('input', e => { 
+                state.borderWidth = parseInt(e.target.value); 
+                els.valBorder.innerText = state.borderWidth + 'px';
+                updateEditor(); 
+            });
+
+            els.selectLayout.addEventListener('change', e => {
+                state.currentLayout = e.target.value;
+                generatePrintLayout(); 
+            });
+
+            setupCanvasMouseEvents();
+
+            els.btnDlPng.addEventListener('click', downloadPNG);
+            els.btnDlPdf.addEventListener('click', downloadPDF);
+            els.btnPrint.addEventListener('click', printSheet);
+        }
+
+        function downloadPNG() {
+            if (!state.imageLoaded) return;
+            const link = document.createElement('a');
+            link.download = `passport-photos-${state.currentLayout}.png`;
+            link.href = els.previewCanvas.toDataURL('image/png');
+            link.click();
+        }
+
+        function downloadPDF() {
+            if (!state.imageLoaded) return;
+            const { jsPDF } = window.jspdf;
+            const layout = state.layouts[state.currentLayout];
+            
+            const orientation = layout.w > layout.h ? 'l' : 'p';
+            
+            const pdf = new jsPDF({
+                orientation: orientation,
+                unit: 'px',
+                format: [layout.w, layout.h]
+            });
+            
+            const imgData = els.previewCanvas.toDataURL('image/jpeg', 0.95);
+            pdf.addImage(imgData, 'JPEG', 0, 0, layout.w, layout.h);
+            pdf.save(`passport-photos-${state.currentLayout}.pdf`);
+        }
+
+        function printSheet() {
+            if (!state.imageLoaded) return;
+            
+            const dataUrl = els.previewCanvas.toDataURL('image/jpeg', 1.0);
+            const layout = state.layouts[state.currentLayout];
+            
+            els.printArea.innerHTML = `<img src="${dataUrl}" style="width: 100%; height: auto; display: block;">`;
+            els.printArea.classList.remove('hidden');
+            
+            const style = document.createElement('style');
+            style.id = 'dynamic-print-style';
+            const wIn = layout.w / 300;
+            const hIn = layout.h / 300;
+            style.innerHTML = `@media print { @page { size: ${wIn}in ${hIn}in; margin: 0; } }`;
+            document.head.appendChild(style);
+            
+            window.print();
+            
+            setTimeout(() => {
+                els.printArea.classList.add('hidden');
+                els.printArea.innerHTML = '';
+                document.head.removeChild(style);
+            }, 1000);
+        }
+
+        window.addEventListener('DOMContentLoaded', init);
+
+    </script>
+</body>
+</html>
