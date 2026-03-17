@@ -1,8 +1,7 @@
-from flask import Flask, render_template, request, send_file
-from rembg import remove
-from PIL import Image
-import io
 import os
+import io
+from flask import Flask, render_template, request, send_file, jsonify
+from PIL import Image
 
 app = Flask(__name__)
 
@@ -14,12 +13,13 @@ def home():
 def remove_bg():
 
     if "image" not in request.files:
-        return {"error": "No image uploaded"}
+        return jsonify({"error": "No image uploaded"}), 400
 
     file = request.files["image"]
 
-    input_image = Image.open(file.stream)
+    from rembg import remove   # lazy import (important)
 
+    input_image = Image.open(file.stream)
     output = remove(input_image)
 
     img_io = io.BytesIO()
