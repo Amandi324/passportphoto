@@ -544,7 +544,8 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error("Server error - Make sure Python server is running!");
+                    const errData = await response.text();
+                    throw new Error(`Server returned ${response.status}: ${errData}`);
                 }
 
                 const outBlob = await response.blob();
@@ -581,7 +582,7 @@
 
             } catch (error) {
                 console.error("Server Background Removal Failed:", error);
-                alert("Failed to extract person. Ensure your Flask server (app.py) is running locally.");
+                alert(`Background removal failed!\n\nDetails: ${error.message}\n\nTip: If you are on Render's free tier, the server might have timed out or run out of memory. Please check your Render Logs.`);
                 els.btnRemoveBg.disabled = false;
                 els.btnRemoveBg.innerHTML = '<i data-lucide="wand-2" width="16"></i> AI Remove Background';
                 lucide.createIcons();
